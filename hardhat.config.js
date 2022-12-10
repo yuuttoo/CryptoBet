@@ -1,12 +1,18 @@
 require("@nomicfoundation/hardhat-toolbox");
+//import('hardhat/config').HardhatUserConfig
 require('dotenv').config();
+//console.log("test2", process.env); // remove this after you've confirmed it is working
 
 
-/** @type import('hardhat/config').HardhatUserConfig */
+
 const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
-const GOERLI_PRIVATE_KEY = process.env.GOERLI_PRIVATE_KEY;
+const ALCHEMY_API_KEY_MAINNET = process.env.ALCHEMY_API_KEY_MAINNET; 
+const ALCHEMY_GOERLI_RPC_URL = process.env.ALCHEMY_GOERLI_RPC_URL; 
+
+const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY;
 
+//console.log("PRIVATE_KEY!! ", process.env.PRIVATE_KEY);
 //console.log("Log", ETHERSCAN_API_KEY, GOERLI_PRIVATE_KEY)
 
 
@@ -24,10 +30,15 @@ module.exports = {
       },
     ],
   },
-  networks: {
+  networks: {// https://eth-goerli.alchemyapi.io/v2
     goerli: {
-      url: `https://eth-goerli.alchemyapi.io/v2/${ALCHEMY_API_KEY}`,
-      accounts: GOERLI_PRIVATE_KEY !== undefined ? [GOERLI_PRIVATE_KEY] : [],
+      url: `${ALCHEMY_GOERLI_RPC_URL}`,
+      accounts: PRIVATE_KEY !== undefined ? [PRIVATE_KEY] : [],
+    },
+    hardhat: {
+      forking: {
+        url: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY_MAINNET}`,
+      }
     }
   },
   defaultNetwork: "hardhat",
