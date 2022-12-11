@@ -16,20 +16,44 @@ contract Prediction is Ownable, ReentrancyGuard {
     IERC20 public token; 
     //變數
     AggregatorV3Interface internal priceFeed;
-    uint256 constant entryFee = 0.01 ether;//基本入場費 
-    uint256 roundId = 0; //紀錄場次 供oracle判斷次序
-    uint256 totalBalance;
-    
-    // struct gameRecord {
 
-    // }
+    uint256 constant entryFee = 0.01 ether;//基本入場費 
+    uint256 betId = 0; //紀錄場次
+    uint256 roundId = 0; //紀錄場次 供oracle判斷次序 需要從betId轉型？
+    uint256 totalBalance;//供贏家提領的獎金餘額
+
+    mapping(uint256 => mapping(address => UserRecord)) public userClaimProof; //user要領錢的比對證明，儲存玩了哪幾場、累積多少錢可以提領
+    mapping(address => uint256[]) public userBets;//user參與過的局次 把參與過的roundId push 進去
+    
+    uint256 public constant gameIntervalSeconds = 30 seconds;//每局之間的間隔30秒
+    
+    enum Position {//跌或漲
+        Up,
+        Down
+    }
+
     //每局開始需要紀錄: 開始時間、預計結束時間、賭金總和、mapping 正方地址、賭金、mapping負方賭金(struct)、上一場的結算price
     // （作為新局的price）
-    
-    //treasury庫為需要發出的獎金，待user claim時才計算累加的獎金有多少
-    
-    
-    
+    struct EachBetRecord {
+        uint256 roundId; 
+        uint256 startTime;
+        uint256 endTime;
+        uint256 lockTime;
+        uint256 lastBetPrice;
+        uint256 betDownUsers;
+        uint256 betUpUsers;
+        uint256 lastGameBetAmountBalance;
+        uint256 totalBetAmount;//玩家投入的賭金 如果這場沒有贏家  會放到下一場
+        uint256 totalReward;//本場總獎金 為lastGameBetAmountBalance + totalBetAmount
+    }
+
+    struct UserRecord { //user 投注每場的紀錄
+        Position position;
+        uint256 amount;//金額
+        bool claimed; //是否已領取獎金
+    }
+
+
 
     //chainlink地址
 
@@ -79,6 +103,7 @@ contract Prediction is Ownable, ReentrancyGuard {
     //入金(計算各個錢包地址入金金額）開始玩
     function betUp(uint256 _amount) external {
         require(_amount >= entryFee, "Minimal Entry Fee is 0.01 ETH");
+        
 
     }
 
@@ -93,13 +118,19 @@ contract Prediction is Ownable, ReentrancyGuard {
     //計算賠率（optional → 根據兩邊user的數量差異計算？）//計算贏家地址與獎金
     function winnerRewardCalculater() private {}
     
-    //轉出賭金給贏家
-    function payWinner() external {//要用claim 給user自己做 合約不能自己動作
 
+    //treasury庫為需要發出的獎金，待user claim時才計算累加的獎金有多少 最後才transfer
+    function calim() public {
+        //for loop查詢msg.sender的game record 
+        //加總每場的reward 
+        //require 獎金池比reward 多
+        //改user狀態 池子金額
+        //transfer 
     }
 
+
     //剩下的錢存在合約繼續下一場（或領出）
-    function withdraw(uint256 _amount) external onlyOwner {
+    function withdraw(uint256 _amount) external onlyOwner { //保留由平台方提領
         totalBalance = IERC20(token).balanceOf(address(this));
         require(totalBalance >= _amount, "withdraw amount should less than total balance");
         IERC20(token).transfer(msg.sender, _amount);
