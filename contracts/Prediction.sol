@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.17;
 
 import "hardhat/console.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
@@ -12,20 +12,23 @@ import "./interfaces/AggregatorV3Interface.sol";
 
 contract Prediction is Ownable, ReentrancyGuard { 
     using SafeERC20 for IERC20;
-
-    IERC20 public token; 
+ 
+    IERC20 public token;  //USDC  //'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
     //變數
     AggregatorV3Interface internal priceFeed;
-
-    uint256 constant entryFee = 0.01 ether;//基本入場費 
-    uint256 betId = 0; //紀錄場次
-    uint256 roundId = 0; //紀錄場次 供oracle判斷次序 需要從betId轉型？
+    uint256 public constant gameIntervalSeconds = 30 seconds;//每局之間的間隔30秒
+    uint256 constant minBetAmount = 10000;//基本入場費 10 USDC 檢查一下decimal         
+    uint256 currentBetId; //紀錄場次
+    uint256 roundId; //紀錄場次 供oracle判斷次序 需要從betId轉型？
     uint256 totalBalance;//供贏家提領的獎金餘額
 
-    mapping(uint256 => mapping(address => UserRecord)) public userClaimProof; //user要領錢的比對證明，儲存玩了哪幾場、累積多少錢可以提領
+   
+    mapping(uint256 => mapping(address => UserRecord)) public userBetProof; //總帳本 提供user要領錢的比對證明，儲存玩了哪幾場、累積多少錢可以提領
+    mapping(uint256 => EachBetRecord) public allBetRecords;  //紀錄每回合資訊 使用id查詢 1個betId 存一組bet資訊
     mapping(address => uint256[]) public userBets;//user參與過的局次 把參與過的roundId push 進去
     
-    uint256 public constant gameIntervalSeconds = 30 seconds;//每局之間的間隔30秒
+
+    
     
     enum Position {//跌或漲
         Up,
@@ -34,8 +37,9 @@ contract Prediction is Ownable, ReentrancyGuard {
 
     //每局開始需要紀錄: 開始時間、預計結束時間、賭金總和、mapping 正方地址、賭金、mapping負方賭金(struct)、上一場的結算price
     // （作為新局的price）
+    //如果站在少數方 就會分到比較多 所以不是固定賠率 是把總獎金拿來分給參與人數
     struct EachBetRecord {
-        uint256 roundId; 
+        uint256 betId;
         uint256 startTime;
         uint256 endTime;
         uint256 lockTime;
@@ -62,10 +66,16 @@ contract Prediction is Ownable, ReentrancyGuard {
      * Aggregator: ETH/USD
      * Address: 0xD4a33860578De61DBAbDc8BFdb98FD742fA7028e
      */
-    constructor(address _priceFeed) {
+    constructor(
+        address _priceFeed,
+        IERC20 _token
+        ) {
         //ETH / USD 
         priceFeed = AggregatorV3Interface(_priceFeed);
         //priceFeed = AggregatorV3Interface(0xD4a33860578De61DBAbDc8BFdb98FD742fA7028e)//Goerli
+        token = _token;
+        roundId = 0;
+        currentBetId = 0;
     }
 
 
@@ -85,6 +95,11 @@ contract Prediction is Ownable, ReentrancyGuard {
     }
 
     //可開始進行遊戲
+     //上一場剩餘獎金是否為0 不是0就加入此局
+        // if(eachBetRecord.lastGameBetAmountBalance != 0) {
+        //     eachBetRecord.totalBetAmount = eachBetRecord.totalBetAmount 
+        //     + eachBetRecord.lastGameBetAmountBalance;
+        // }
     function gameOpen() internal {
         roundId++;
     }
@@ -101,31 +116,110 @@ contract Prediction is Ownable, ReentrancyGuard {
     
     //for user 
     //入金(計算各個錢包地址入金金額）開始玩
-    function betUp(uint256 _amount) external {
-        require(_amount >= entryFee, "Minimal Entry Fee is 0.01 ETH");
+    function betUp(uint256 betId, uint256 _amount) external {
+        require(betId == currentBetId, "This Bet is not availble");
+        require(_amount >= minBetAmount, "Minimal Bet Amount is 10 USDC");
+        require(userBetProof[currentBetId][msg.sender].amount == 0, "Can only enter once on each bet");
         
+        token.transferFrom(msg.sender, address(this), _amount);
 
+        //更新每局紀錄資訊
+        uint256 amount = _amount;
+        EachBetRecord storage eachBetRecord = allBetRecords[betId];
+        eachBetRecord.totalBetAmount = eachBetRecord.totalBetAmount + amount;
+       
+        eachBetRecord.betUpUsers += 1;
+
+
+        //更新user state variable
+        //總帳本
+        UserRecord storage userRecord = userBetProof[betId][msg.sender];
+        userRecord.position = Position.Up;
+        userRecord.amount = amount;
+        //紀錄user本次參與的賭局id
+        userBets[msg.sender].push(betId);
+    
     }
 
-    function betDown(uint256 _amount)  external {
-        require(_amount >= entryFee, "Minimal Entry Fee is 0.01 ETH");
+    function betDown(uint256 betId, uint256 _amount)  external {
+        require(betId == currentBetId, "This Bet is not availble");
+        require(_amount >= minBetAmount, "Minimal Bet Amount is 10 USDC");
+        require(userBetProof[currentBetId][msg.sender].amount == 0, "Can only enter once on each bet");
+        
+        token.transferFrom(msg.sender, address(this), _amount);
 
+        //更新每局紀錄資訊
+        uint256 amount = _amount;
+        EachBetRecord storage eachBetRecord = allBetRecords[betId];
+        eachBetRecord.totalBetAmount = eachBetRecord.totalBetAmount + amount;
+       
+        eachBetRecord.betUpUsers += 1;
+
+
+        //更新user state variable
+        //總帳本
+        UserRecord storage userRecord = userBetProof[betId][msg.sender];
+        userRecord.position = Position.Up;
+        userRecord.amount = amount;
+        //紀錄user本次參與的賭局id //之後從這找地址 再回總帳本找資訊
+        userBets[msg.sender].push(betId);
     }
 
 
     //計時5分鐘or 更長
     function timeCounter() private {}
     //計算賠率（optional → 根據兩邊user的數量差異計算？）//計算贏家地址與獎金
-    function winnerRewardCalculater() private {}
+    function RewardCalculater(uint256 _betId) private {
+        //獲取投注up人數
+        //uint256 betUpUsers = EachBetRecord
+        //獲取投注down人數
+        
+    }
     
 
     //treasury庫為需要發出的獎金，待user claim時才計算累加的獎金有多少 最後才transfer
-    function calim() public {
-        //for loop查詢msg.sender的game record 
-        //加總每場的reward 
-        //require 獎金池比reward 多
-        //改user狀態 池子金額
-        //transfer 
+    function calim(uint256[] calldata betIdArray) external {//因為user可能玩超過一場，以betId array查詢場次
+        uint256 rewardToClaim; //user可領取金額 // = totalBalance; 
+        
+        for(uint256 i = 0; i < betIdArray.length; i++) {
+            //確認該場次id < 目前場次id 已經過去的局才能領取
+            require(allBetRecords[betIdArray[i]].betId < currentBetId, "Bet not start yet");
+            uint reward; 
+            //計算reward
+            reward = (userBetProof[betIdArray[i]][msg.sender].amount * 15000) / 10000;//該局投入金額 * 1.5賠率計算獎金
+            //require(userBets[betIdArray[i]].claimed == true, "not eligible to claim");
+            
+            //update user紀錄狀態為已提領
+            userBetProof[betIdArray[i]][msg.sender].claimed = true;
+            //加總獲勝局數可提領的獎金
+            rewardToClaim += reward; 
+        }
+        //for loop 結束 轉錢給user
+        if(rewardToClaim > 0) {
+            token.transfer(msg.sender, rewardToClaim);
+        }
+    }
+
+    //查詢user參與場數資訊
+    // function getUserBetsRecord(
+    //     address user, 
+    //     uint256 betId, 
+    //     uint256 count
+    // ) external view returns (
+    //     uint256[] memory,
+    //     EachBetRecord[] memory,
+    //     uint256) 
+    // {
+    //     //uint256 length = getUserTotalBets(user);
+    //     userBets[user][i]
+
+    //     return ()
+        
+    // }
+
+    //查詢user參與場數
+    function getUserTotalBets(address user) external view returns (uint256) {
+        return userBets[user].length;
     }
 
 
