@@ -10,6 +10,7 @@ import "./interfaces/AggregatorV3Interface.sol";
 
 
 
+
 contract Prediction is Ownable, ReentrancyGuard { 
     using SafeERC20 for IERC20;
  
@@ -17,10 +18,11 @@ contract Prediction is Ownable, ReentrancyGuard {
     //變數
     AggregatorV3Interface internal priceFeed;
     uint256 public constant gameIntervalSeconds = 30 seconds;//每局之間的間隔30秒
-    uint256 constant minBetAmount = 10000;//基本入場費 10 USDC 檢查一下decimal         
-    uint256 currentBetId; //紀錄場次
-    uint256 roundId; //紀錄場次 供oracle判斷次序 需要從betId轉型？
-    uint256 totalBalance;//供贏家提領的獎金餘額
+    uint256 public constant minBetAmount = 10000;//基本入場費 10 USDC 檢查一下decimal         
+    uint256 public currentBetId; //紀錄場次
+    //uint256 public roundId; //紀錄場次 供oracle判斷次序 需要從betId轉型？
+    uint256 public latestOracleRoundId; //從chainlink取得後轉型
+    uint256 public totalBalance;//供贏家提領的獎金餘額
 
    
     mapping(uint256 => mapping(address => UserRecord)) public userBetProof; //總帳本 提供user要領錢的比對證明，儲存玩了哪幾場、累積多少錢可以提領
@@ -40,9 +42,9 @@ contract Prediction is Ownable, ReentrancyGuard {
     //如果站在少數方 就會分到比較多 所以不是固定賠率 是把總獎金拿來分給參與人數
     struct EachBetRecord {
         uint256 betId;
-        uint256 startTime;
-        uint256 endTime;
-        uint256 lockTime;
+        uint256 startTimestamp;
+        uint256 endTimestamp;
+        uint256 lockTimestamp;
         uint256 lastBetPrice;
         uint256 betDownUsers;
         uint256 betUpUsers;
@@ -74,7 +76,7 @@ contract Prediction is Ownable, ReentrancyGuard {
         priceFeed = AggregatorV3Interface(_priceFeed);
         //priceFeed = AggregatorV3Interface(0xD4a33860578De61DBAbDc8BFdb98FD742fA7028e)//Goerli
         token = _token;
-        roundId = 0;
+        //roundId = 0;
         currentBetId = 0;
     }
 
@@ -82,36 +84,18 @@ contract Prediction is Ownable, ReentrancyGuard {
     //_isContract check 
     //從chainlink拿data 
     //oracle 
-    function getLatestPrice() public view returns (int) {
+    function getLatestPrice() public view returns (uint80, int) {
         (
-          uint roundID, 
+          uint80 roundID, 
           int price, 
           uint startedAt, 
           uint timeStamp,
           uint80 answeredInRound 
         ) = priceFeed.latestRoundData();
         
-        return price / 1e8;
+        return (roundID, price / 1e8);
     }
 
-    //可開始進行遊戲
-     //上一場剩餘獎金是否為0 不是0就加入此局
-        // if(eachBetRecord.lastGameBetAmountBalance != 0) {
-        //     eachBetRecord.totalBetAmount = eachBetRecord.totalBetAmount 
-        //     + eachBetRecord.lastGameBetAmountBalance;
-        // }
-    function gameOpen() internal {
-        roundId++;
-    }
-
-    //停止入金 處理狀態變數後再調用gameUnlock重新開放
-    function gameLock() internal {}
-
-    //開放入金 
-    function gameUnlock() internal {}
-
-    //一局結算 
-    function gameClose() internal {}
 
     
     //for user 
@@ -200,30 +184,41 @@ contract Prediction is Ownable, ReentrancyGuard {
         }
     }
 
-    //查詢user參與場數資訊
-    // function getUserBetsRecord(
-    //     address user, 
-    //     uint256 betId, 
-    //     uint256 count
-    // ) external view returns (
-    //     uint256[] memory,
-    //     EachBetRecord[] memory,
-    //     uint256) 
-    // {
-    //     //uint256 length = getUserTotalBets(user);
-    //     userBets[user][i]
-
-    //     return ()
-        
-    // }
 
     //查詢user參與場數
     function getUserTotalBets(address user) external view returns (uint256) {
         return userBets[user].length;
     }
 
+    //可開始進行遊戲
+    //啟動每一輪遊戲前的狀態管理             
+    function _gameOpen(uint256 betId) internal {
+        EachBetRecord storage eachBetRecord = allBetRecords[betId];
 
-    //剩下的錢存在合約繼續下一場（或領出）
+        eachBetRecord.startTimestamp = block.timestamp;
+        eachBetRecord.lockTimestamp = block.timestamp + gameIntervalSeconds;//30秒處理時間
+        eachBetRecord.endTimestamp = block.timestamp + (2 * gameIntervalSeconds);//60秒處理
+
+
+        //從oracle取得目前價格
+        (uint80 currentRoundId, int256 currentPrice) = getLatestPrice();
+        latestOracleRoundId = uint256(currentRoundId);//把oracle的id轉型為uint256
+        //
+
+
+    }
+
+    //停止入金 處理狀態變數後再調用gameUnlock重新開放
+    function gameLock() internal {}
+
+    //開放入金 
+    function gameUnlock() internal {}
+
+    //一局結算 
+    function gameClose() internal {}
+
+
+    //提領 
     function withdraw(uint256 _amount) external onlyOwner { //保留由平台方提領
         totalBalance = IERC20(token).balanceOf(address(this));
         require(totalBalance >= _amount, "withdraw amount should less than total balance");
