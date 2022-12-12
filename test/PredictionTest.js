@@ -28,11 +28,11 @@ describe("Price Prediction", () => {
 
     let ethPrice = await predictionContract.connect(deployer).getLatestPrice();
     console.log(ethPrice)
-    //這邊好像需要上鏈 才能抓資料 原本的test 只在local test 所以倍revert?
+    //這邊好像需要上鏈 才能抓資料 原本的test 只在local test 所以revert?
     //但會搞成這麼麻煩嗎？ 如果是可能要之後再搞 
     //還是要回去先搞合約
 
-
+    
 
     })
   }  

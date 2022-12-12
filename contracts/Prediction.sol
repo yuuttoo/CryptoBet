@@ -17,8 +17,10 @@ contract Prediction is Ownable, ReentrancyGuard {
     IERC20 public token;  //USDC  //'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
     //變數
     AggregatorV3Interface internal priceFeed;
-    uint256 public constant gameIntervalSeconds = 30 seconds;//每局之間的間隔30秒
-    uint256 public constant minBetAmount = 10000;//基本入場費 10 USDC 檢查一下decimal         
+    
+    uint256 public constant gameIntervalSeconds = 30 seconds;//30秒為單位
+    uint256 public constant minBetAmount = 0.01 ether ;//最小賭金 0.01 檢查一下decimal   
+    uint256 public constant maxBetAmount = 100 ether;// 最高賭金  檢查一下decimal               
     uint256 public currentBetId; //紀錄場次
     //uint256 public roundId; //紀錄場次 供oracle判斷次序 需要從betId轉型？
     uint256 public latestOracleRoundId; //從chainlink取得後轉型
@@ -28,8 +30,6 @@ contract Prediction is Ownable, ReentrancyGuard {
     mapping(uint256 => mapping(address => UserRecord)) public userBetProof; //總帳本 提供user要領錢的比對證明，儲存玩了哪幾場、累積多少錢可以提領
     mapping(uint256 => EachBetRecord) public allBetRecords;  //紀錄每回合資訊 使用id查詢 1個betId 存一組bet資訊
     mapping(address => uint256[]) public userBets;//user參與過的局次 把參與過的roundId push 進去
-    
-
     
     
     enum Position {//跌或漲
@@ -68,23 +68,22 @@ contract Prediction is Ownable, ReentrancyGuard {
      * Aggregator: ETH/USD
      * Address: 0xD4a33860578De61DBAbDc8BFdb98FD742fA7028e
      */
-    constructor(
+    constructor(//global變數初始化
         address _priceFeed,
         IERC20 _token
         ) {
-        //ETH / USD 
         priceFeed = AggregatorV3Interface(_priceFeed);
-        //priceFeed = AggregatorV3Interface(0xD4a33860578De61DBAbDc8BFdb98FD742fA7028e)//Goerli
         token = _token;
-        //roundId = 0;
         currentBetId = 0;
+        latestOracleRoundId = 0;
+        totalBalance = 0;//供贏家提領的獎金USDC餘額 test時先給一筆錢 設定上限
     }
 
 
     //_isContract check 
     //從chainlink拿data 
     //oracle 
-    function getLatestPrice() public view returns (uint80, int) {
+    function getLatestPrice() public view returns (uint80, int, uint) {//(uint80, int)
         (
           uint80 roundID, 
           int price, 
@@ -93,7 +92,8 @@ contract Prediction is Ownable, ReentrancyGuard {
           uint80 answeredInRound 
         ) = priceFeed.latestRoundData();
         
-        return (roundID, price / 1e8);
+        return (roundID, price, timeStamp);//目前ETH價格 / 1e8 取到小數點後8位避免波動過小沒有勝負
+       
     }
 
 
@@ -153,6 +153,8 @@ contract Prediction is Ownable, ReentrancyGuard {
     //計時5分鐘or 更長
     function timeCounter() private {}
     //計算賠率（optional → 根據兩邊user的數量差異計算？）//計算贏家地址與獎金
+
+
     function RewardCalculater(uint256 _betId) private {
         //獲取投注up人數
         //uint256 betUpUsers = EachBetRecord
@@ -195,27 +197,38 @@ contract Prediction is Ownable, ReentrancyGuard {
     function _gameOpen(uint256 betId) internal {
         EachBetRecord storage eachBetRecord = allBetRecords[betId];
 
+        eachBetRecord.betId = betId;
         eachBetRecord.startTimestamp = block.timestamp;
         eachBetRecord.lockTimestamp = block.timestamp + gameIntervalSeconds;//30秒處理時間
         eachBetRecord.endTimestamp = block.timestamp + (2 * gameIntervalSeconds);//60秒處理
+        eachBetRecord.totalBetAmount = 0; 
 
 
         //從oracle取得目前價格
-        (uint80 currentRoundId, int256 currentPrice) = getLatestPrice();
-        latestOracleRoundId = uint256(currentRoundId);//把oracle的id轉型為uint256
-        //
-
+        // (uint80 currentRoundId, int256 currentPrice) = getLatestPrice();
+        // latestOracleRoundId = uint256(currentRoundId);//把oracle的id轉型為uint256
 
     }
 
-    //停止入金 處理狀態變數後再調用gameUnlock重新開放
-    function gameLock() internal {}
 
-    //開放入金 
-    function gameUnlock() internal {}
+    //賭局(每場賭局的生命週期循環）
+    //開賭 可收賭金 處理狀態變數後再調用gameUnlock重新開放
+    function _openBet() internal {}
 
-    //一局結算 
-    function gameClose() internal {}
+    //停收賭金 抓oracle數值 更新本局機制status、莊家帳本、user帳本 
+    function _lockBet() internal {}
+
+    //結算 推進機制到下一場 機制歸零、帳本歸零 
+    function _closeBet() internal {}
+
+
+    //機制相關
+    //暫停（沒事不會用） 中止倒數機制跟賭局進行
+    function onPause() external onlyOwner {}
+
+    //機制 resume(有暫停才會用到）
+    function onResume() external onlyOwner {}
+
 
 
     //提領 
