@@ -11,8 +11,6 @@ import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 //import "./interfaces/AggregatorV3Interface.sol";
 
 
-
-
 contract Prediction is Ownable, ReentrancyGuard { 
     using SafeERC20 for IERC20;
  
@@ -21,11 +19,9 @@ contract Prediction is Ownable, ReentrancyGuard {
     AggregatorV3Interface internal priceFeed;
     
 
-    uint256 public constant WAITING_PERIOD = 1 days;
-    uint256 public constant gameIntervalSeconds = 30 seconds;//30秒為單位
-    uint256 public constant FIXED_BET_AMOUNT = 0.01 ether; //限制每注金額 0.01ether
-    //uint256 public constant minBetAmount = 0.01 ether ;//最小賭金 0.01 檢查一下decimal   
-    //uint256 public constant maxBetAmount = 100 ether;// 最高賭金  檢查一下decimal               
+    uint256 public constant WAITING_PERIOD = 2 hours;
+    uint256 public constant INTERVAL_SECONDS = 30 seconds;//30秒為單位
+    uint256 public constant FIXED_BET_AMOUNT = 0.01 ether; //限制每注金額 0.01ether            
     uint256 public currentBetId; //紀錄場次
     //uint256 public roundId; //紀錄場次 供oracle判斷次序 需要從betId轉型？
     uint256 public latestOracleRoundId; //從chainlink取得後轉型
@@ -48,11 +44,12 @@ contract Prediction is Ownable, ReentrancyGuard {
     //如果站在少數方 就會分到比較多 所以不是固定賠率 是把總獎金拿來分給參與人數
     struct EachBetRecord {
         uint256 betId;
+        uint256 oracleRoundId;
         uint256 startTimestamp;
-        uint256 endTimestamp;
         uint256 lockTimestamp;
-        uint256 lastBetPrice;//前一局的ETH報價
-        uint256 currentBetPrice;//本局lock時ETH報價
+        uint256 endTimestamp;
+        int256 lastBetPrice;//前一局的ETH報價
+        int256 currentBetPrice;//本局lock時ETH報價
         uint256 betDownUsers;
         uint256 betUpUsers;
         uint256 lastGameBetAmountBalance;
@@ -66,10 +63,7 @@ contract Prediction is Ownable, ReentrancyGuard {
         bool claimed; //是否已領取獎金
     }
 
-
-
     //chainlink地址
-
     /**
      * Network: Goerli
      * Aggregator: ETH/USD
@@ -90,7 +84,7 @@ contract Prediction is Ownable, ReentrancyGuard {
     //_isContract check 
     //從chainlink拿data 
     //oracle 
-    function getLatestPrice() public view returns (uint80, int, uint) {//(uint80, int)
+    function getLatestPrice() public view returns (uint80, int) {
         (
           uint80 roundID, 
           int price, 
@@ -98,16 +92,17 @@ contract Prediction is Ownable, ReentrancyGuard {
           uint timeStamp,
           uint80 answeredInRound 
         ) = priceFeed.latestRoundData();
-        
-        return (roundID, price, timeStamp);//目前ETH價格 / 1e8 取到小數點後8位避免波動過小沒有勝負
-       
+        require(uint256(roundID) > latestOracleRoundId, "Oracle roundId shoulde be updated");//確認這次oracle的報價比上一次新
+
+        return (roundID, price / 1e8);//目前ETH價格 取到整數 
     }
 
 
     
     //for user 
-    //入金(計算各個錢包地址入金金額）開始玩
-    function betUp(uint256 betId, uint256 _amount) external {
+    //開始賭 
+    function betUp(uint256 betId, uint256 _amount) external nonReentrant {
+        require(!_isContract(msg.sender), "Only wallet allowed");
         require(betId == currentBetId, "This Bet is not availble");
         require(_amount != FIXED_BET_AMOUNT, "Bet Amount should be 0.01 ETH");
         require(userBetProof[currentBetId][msg.sender].amount == 0, "Can only enter once on each bet");
@@ -133,6 +128,7 @@ contract Prediction is Ownable, ReentrancyGuard {
     }
 
     function betDown(uint256 betId, uint256 _amount)  external {
+        require(!_isContract(msg.sender), "Only wallet allowed");
         require(betId == currentBetId, "This Bet is not availble");
         require(_amount != FIXED_BET_AMOUNT, "Bet Amount should be 0.01 ETH");
         require(userBetProof[currentBetId][msg.sender].amount == 0, "Can only enter once on each bet");
@@ -155,11 +151,6 @@ contract Prediction is Ownable, ReentrancyGuard {
         //紀錄user本次參與的賭局id //之後從這找地址 再回總帳本找資訊
         userBets[msg.sender].push(betId);
     }
-
-
-    //計時5分鐘or 更長
-    // function timeCounter() private {}
-    //計算賠率（optional → 根據兩邊user的數量差異計算？）//計算贏家地址與獎金
 
 
     function RewardCalculater(uint256 _betId) internal {
@@ -191,7 +182,8 @@ contract Prediction is Ownable, ReentrancyGuard {
     
 
     //查詢該局需要發出的獎金， 最後才transfer
-    function calim(uint256[] calldata betIdArray) external {//因為user可能玩超過一場，以betId array查詢場次
+    function calim(uint256[] calldata betIdArray) external nonReentrant {//因為user可能玩超過一場，以betId array查詢場次
+        require(!_isContract(msg.sender), "Only wallet allowed");
         uint256 rewardToClaim; //user可領取總金額 
         
         for(uint256 i = 0; i < betIdArray.length; i++) {
@@ -220,43 +212,54 @@ contract Prediction is Ownable, ReentrancyGuard {
     }
 
     //可開始進行遊戲
-    //啟動每一輪遊戲前的狀態管理             
-    function _gameOpen(uint256 betId) internal {
-        EachBetRecord storage eachBetRecord = allBetRecords[betId];
-
-        eachBetRecord.betId = betId;
-        eachBetRecord.startTimestamp = block.timestamp;
-        eachBetRecord.lockTimestamp = block.timestamp + gameIntervalSeconds;//30秒處理時間
-        eachBetRecord.endTimestamp = block.timestamp + (2 * gameIntervalSeconds);//60秒處理
-        
-
-
-        //從oracle取得目前價格
-        // (uint80 currentRoundId, int256 currentPrice) = getLatestPrice();
-        // latestOracleRoundId = uint256(currentRoundId);//把oracle的id轉型為uint256
-
-    }
-
-
     //賭局(每場賭局的生命週期循環）
     //開賭 可收賭金 處理狀態變數後再調用gameUnlock重新開放
-    function _openBet() internal {
+    function _openBet(uint256 currentBetId) internal {
+        EachBetRecord storage eachBetRecord = allBetRecords[currentBetId];
+
+        eachBetRecord.betId = currentBetId;
+        eachBetRecord.startTimestamp = block.timestamp;
+        eachBetRecord.lockTimestamp = block.timestamp + WAITING_PERIOD;//2hr後開獎
+        eachBetRecord.endTimestamp = block.timestamp + WAITING_PERIOD + INTERVAL_SECONDS;//開獎後留30秒處理獎金
+    }
+
+    //停止入金 抓oracle數值 更新本局結算用到的變數 
+    function _lockBet(uint256 currentBetId, uint _oracleRoundId, int256 _price) internal {
+        require(block.timestamp >= allBetRecords[currentBetId].lockTimestamp, "Not lock time yet");
+        require(block.timestamp <= allBetRecords[currentBetId].lockTimestamp + INTERVAL_SECONDS, "Over lock time");
+
+        EachBetRecord storage eachBetRecord = allBetRecords[currentBetId];
+        eachBetRecord.endTimestamp = block.timestamp + INTERVAL_SECONDS;//再加30秒設定為關局時間
+        
 
     }
 
-    //停收賭金 抓oracle數值 更新本局機制status、莊家帳本、user帳本 
-    function _lockBet() internal {}
-
     //結算 推進機制到下一場 機制歸零、帳本歸零 
-    function _closeBet() internal {}
+    function _closeBet(uint256 currentBetId) internal {
+        require(allBetRecords[currentBetId].endTimestamp != 0, "Already closed");
+        require(block.timestamp >= allBetRecords[currentBetId].endTimestamp, "Not close time yet");
+        require(block.timestamp <= allBetRecords[currentBetId].endTimestamp + INTERVAL_SECONDS, "Over close time");//一局結束後30秒才能開新局
+
+        //從oracle取得目前價格
+        (uint80 currentRoundId, int256 currentPrice) = getLatestPrice();
+        latestOracleRoundId = uint256(currentRoundId);//用過的roundID紀錄在latest供下一輪比對
+
+        //本局ETH價格結算到紀錄
+        EachBetRecord storage eachBetRecord = allBetRecords[currentBetId];
+        eachBetRecord.currentBetPrice = currentPrice;
+        eachBetRecord.oracleRoundId = currentRoundId;
+
+        currentBetId++; //新局id往下推
+
+    }
 
 
-    //機制相關
-    //暫停（沒事不會用） 中止倒數機制跟賭局進行
-    function onPause() external onlyOwner {}
+    //合約機制相關
+    //暫停賭局機制（沒事不會用） 中止倒數機制跟賭局進行
+    //function onPause() external onlyOwner {}
 
     //機制 resume(有暫停才會用到）
-    function onResume() external onlyOwner {}
+    //function onResume() external onlyOwner {}
 
     //提領 
     function withdraw(uint256 _amount) external onlyOwner { //保留由平台方提領
@@ -266,7 +269,9 @@ contract Prediction is Ownable, ReentrancyGuard {
     }
 
     //only wallet address can play
-    function isContract(address account) internal view returns (bool) {
+    function _isContract(address account) internal view returns (bool) {
         return account.code.length > 0;
     }    
+
+    
 }
