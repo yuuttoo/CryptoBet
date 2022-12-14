@@ -13,14 +13,14 @@ import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 contract Prediction is Ownable, ReentrancyGuard { 
     using SafeERC20 for IERC20;
  
-    IERC20 public token;  //USDC  //'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    IERC20 public token;  
     //變數
     AggregatorV3Interface internal priceFeed;
     
 
     uint256 public constant WAITING_PERIOD = 2 hours;
     uint256 public constant INTERVAL_SECONDS = 30 seconds;//30秒為單位
-    uint256 public constant FIXED_BET_AMOUNT = 0.01 ether; //限制每注金額 0.01ether
+    uint256 public constant FIXED_BET_AMOUNT = 1000000;//1 USDC decimal6, 0.01 ether; //限制每注金額 0.01ether
     //uint256 public constant minBetAmount = 0.01 ether ;//最小賭金 0.01 檢查一下decimal   
     //uint256 public constant maxBetAmount = 100 ether;// 最高賭金  檢查一下decimal               
     uint256 public currentBetId; //紀錄場次
@@ -89,16 +89,19 @@ contract Prediction is Ownable, ReentrancyGuard {
     //_isContract check 
     //從chainlink拿data 
     //oracle 
-    function getLatestPrice() public view returns (uint80, int) {
+    function getPriceFeed() public view returns (AggregatorV3Interface) {
+        return priceFeed;
+    }
+
+    function getLatestPrice() public view returns (uint80, int256) {
         (
           uint80 roundID, 
-          int price, 
+          int256 price, 
           uint startedAt, 
           uint timeStamp,
           uint80 answeredInRound 
         ) = priceFeed.latestRoundData();
-        require(uint256(roundID) > latestOracleRoundId, "Oracle roundId shoulde be updated");//確認這次oracle的報價比上一次新
-
+        require(uint256(roundID) > latestOracleRoundId, "Oracle roundId should be updated");//確認這次oracle的報價比上一次新
         return (roundID, price / 1e8);//目前ETH價格 取到整數 
     }
 

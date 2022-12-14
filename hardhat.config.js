@@ -1,19 +1,16 @@
 require("@nomicfoundation/hardhat-toolbox");
 //import('hardhat/config').HardhatUserConfig
 require('dotenv').config();
-//console.log("test2", process.env); // remove this after you've confirmed it is working
+//console.log("test", process.env); // remove this after you've confirmed it is working
 
 
 
-const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
 const ALCHEMY_API_KEY_MAINNET = process.env.ALCHEMY_API_KEY_MAINNET; 
 const ALCHEMY_GOERLI_RPC_URL = process.env.ALCHEMY_GOERLI_RPC_URL; 
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY;
 
-//console.log("PRIVATE_KEY!! ", process.env.PRIVATE_KEY);
-//console.log("Log", ETHERSCAN_API_KEY, GOERLI_PRIVATE_KEY)
 
 
 module.exports = {
@@ -21,12 +18,12 @@ module.exports = {
     compilers: [
       {
         version: "0.8.17",
-        settings: {
-          optimizer: {
-            enabled: true,
-            runs: 1
-          }
-        }
+        // settings: {
+        //   optimizer: {
+        //     enabled: true,
+        //     runs: 1
+        //   }
+        // }
       },
     ],
   },
@@ -47,13 +44,6 @@ module.exports = {
         goerli: ETHERSCAN_API_KEY,
     },
   },
-  // gasReporter: {
-  //   enabled: REPORT_GAS,
-  //   currency: "USD",
-  //   outputFile: "gas-report.txt",
-  //   noColors: true,
-  //   // coinmarketcap: process.env.COINMARKETCAP_API_KEY,
-  // },
   mocha: {
     timeout: 200000, // 200 seconds max for running tests
   },
