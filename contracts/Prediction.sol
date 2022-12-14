@@ -22,7 +22,6 @@ contract Prediction is Ownable, ReentrancyGuard {
     uint256 public constant INTERVAL_SECONDS = 30 seconds;//30秒為單位
     uint256 public constant FIXED_BET_AMOUNT = 10000000;//固定賭金 10 USDC decimal 6             
     uint256 public currentBetId; //紀錄場次
-    //uint256 public roundId; //紀錄場次 供oracle判斷次序 需要從betId轉型？
     uint256 public latestOracleRoundId; //從chainlink取得後轉型
     int256 public latestOraclePrice;//ETH 上一回報價
     uint256 public totalBalance;//供贏家提領的獎金餘額
@@ -39,9 +38,7 @@ contract Prediction is Ownable, ReentrancyGuard {
         Down
     }
 
-    //每局開始需要紀錄: 開始時間、預計結束時間、賭金總和、mapping 正方地址、賭金、mapping負方賭金(struct)、上一場的結算price
-    // （作為新局的price）
-    //如果站在少數方 就會分到比較多 所以不是固定賠率 是把總獎金拿來分給參與人數
+    
     struct EachBetRecord {
         uint256 betId;
         uint256 oracleRoundId;
@@ -150,7 +147,6 @@ contract Prediction is Ownable, ReentrancyGuard {
         //更新每局紀錄資訊
         uint256 amount = _amount;
         EachBetRecord storage eachBetRecord = allBetRecords[betId];
-        //require(allBetRecords[betId].lockTimestamp == 0, "This Bet has already locked");
         eachBetRecord.totalReward = eachBetRecord.totalReward + amount;
        
         eachBetRecord.betDownUsers += 1;
@@ -275,23 +271,10 @@ contract Prediction is Ownable, ReentrancyGuard {
         require(block.timestamp >= allBetRecords[currentBetId].endTimestamp, "Not close time yet");
         require(block.timestamp <= allBetRecords[currentBetId].endTimestamp + INTERVAL_SECONDS, "Over close time");//一局結束後30秒才能開新局
 
-        //本局ETH價格結算到紀錄
-        //EachBetRecord storage eachBetRecord = allBetRecords[currentBetId];
-        // eachBetRecord.currentBetPrice = currentPrice;
-        // eachBetRecord.oracleRoundId = currentRoundId;
-
-
         currentBetId++; //新局id往下推
 
     }
 
-
-    //合約機制相關
-    //暫停賭局機制（沒事不會用） 中止倒數機制跟賭局進行
-    //function onPause() external onlyOwner {}
-
-    //機制 resume(有暫停才會用到）
-    //function onResume() external onlyOwner {}
 
     //提領 
     function withdraw(uint256 _amount) external onlyOwner { //保留由平台方提領
