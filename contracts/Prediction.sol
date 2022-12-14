@@ -20,9 +20,7 @@ contract Prediction is Ownable, ReentrancyGuard {
 
     uint256 public constant WAITING_PERIOD = 2 hours;
     uint256 public constant INTERVAL_SECONDS = 30 seconds;//30秒為單位
-    uint256 public constant FIXED_BET_AMOUNT = 10000000;//10 USDC decimal6, 0.01 ether; //限制每注金額 0.01ether
-    //uint256 public constant minBetAmount = 0.01 ether ;//最小賭金 0.01 檢查一下decimal   
-    //uint256 public constant maxBetAmount = 100 ether;// 最高賭金  檢查一下decimal               
+    uint256 public constant FIXED_BET_AMOUNT = 10000000;//固定賭金 10 USDC decimal 6             
     uint256 public currentBetId; //紀錄場次
     //uint256 public roundId; //紀錄場次 供oracle判斷次序 需要從betId轉型？
     uint256 public latestOracleRoundId; //從chainlink取得後轉型
@@ -82,7 +80,7 @@ contract Prediction is Ownable, ReentrancyGuard {
         token = _token;
         currentBetId = 0;
         latestOracleRoundId = 0;
-        totalBalance = 0;//供贏家提領的獎金USDC餘額 test時先給一筆錢 設定上限
+        totalBalance = 0;//供贏家提領的獎金USDC餘額 
     }
 
 
@@ -117,6 +115,7 @@ contract Prediction is Ownable, ReentrancyGuard {
         
         token.transferFrom(msg.sender, address(this), _amount);
 
+
         //更新每局紀錄資訊
         uint256 amount = _amount;
         EachBetRecord storage eachBetRecord = allBetRecords[betId];
@@ -131,8 +130,10 @@ contract Prediction is Ownable, ReentrancyGuard {
         UserRecord storage userRecord = userBetProof[betId][msg.sender];
         userRecord.position = Position.Up;
         userRecord.amount = amount;
+
         //紀錄user本次參與的賭局id
         userBets[msg.sender].push(betId);
+
     
     }
 
@@ -150,7 +151,7 @@ contract Prediction is Ownable, ReentrancyGuard {
         require(allBetRecords[betId].lockTimestamp == 0, "This Bet has already locked");
         eachBetRecord.totalReward = eachBetRecord.totalReward + amount;
        
-        eachBetRecord.betUpUsers += 1;
+        eachBetRecord.betDownUsers += 1;
 
 
         //更新user state variable
@@ -167,9 +168,14 @@ contract Prediction is Ownable, ReentrancyGuard {
         EachBetRecord storage eachBetRecord = allBetRecords[_betId];//抓局數資訊
 
         uint256 betUpUsersPerGame = eachBetRecord.betUpUsers;//獲取該局投注up人數
+        console.log("xxx", betUpUsersPerGame);
         uint256 betDownUsersPerGame = eachBetRecord.betDownUsers;//獲取該局投注down人數
+                console.log("yyy", betDownUsersPerGame);
+
         uint256 rewardPerGame = eachBetRecord.totalReward;//獲取該局總投注獎金
         
+                        console.log("zzz", rewardPerGame);
+
         
         //up 方勝 前局price < 此局price
         if(eachBetRecord.lastBetPrice < eachBetRecord.currentBetPrice) {
@@ -192,7 +198,7 @@ contract Prediction is Ownable, ReentrancyGuard {
     
 
     //查詢該局需要發出的獎金， 最後才transfer
-    function calim(uint256[] calldata betIdArray) external nonReentrant {//因為user可能玩超過一場，以betId array查詢場次
+    function claim(uint256[] calldata betIdArray) external nonReentrant {//因為user可能玩超過一場，以betId array查詢場次
         require(!_isContract(msg.sender), "Only wallet allowed");
         uint256 rewardToClaim; //user可領取總金額 
         

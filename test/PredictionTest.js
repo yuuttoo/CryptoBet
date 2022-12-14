@@ -3,6 +3,7 @@ const {
   ether,
   constants,
   BigNumber,
+  expectRevert,
   loadFixture,
 } = require("@nomicfoundation/hardhat-network-helpers");
 const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
@@ -67,7 +68,7 @@ describe("Price Prediction", () => {
     await usdc.connect(betDownuser6).approve(predictionContract.address, transferAmount);
 
 
-    return {owner, betUpuser1, betUpuser2, betUpuser3, betDownuser4, betDownuser5, betDownuser6, predictionContract, mockOracle};
+    return {owner, betUpuser1, betUpuser2, betUpuser3, betDownuser4, betDownuser5, betDownuser6, predictionContract, mockOracle, usdc};
   }
 
   it("should set the aggregator addresses correctly", async function() {//ok
@@ -115,17 +116,43 @@ describe("Price Prediction", () => {
   })
 
 
-  it("Should record user bet record", async function() {
-    const {owner, betUpuser1, betUpuser2, betUpuser3, betDownuser4, betDownuser5, betDownuser6, predictionContract, mockOracle} = await loadFixture(deployFixture);
+  it("Should transfer user bet amount", async function() {
+    const {owner, betUpuser1, betUpuser2, betUpuser3, betDownuser4, betDownuser5, betDownuser6, predictionContract, mockOracle, usdc} = await loadFixture(deployFixture);
+    const currentBetId = 0;
+    
+    await predictionContract.connect(betUpuser1).betUp(currentBetId, ethers.utils.parseUnits("10", 6));//需投注10USDC
+    await predictionContract.connect(betUpuser2).betUp(currentBetId, ethers.utils.parseUnits("10", 6));
+    await predictionContract.connect(betUpuser3).betUp(currentBetId, ethers.utils.parseUnits("10", 6));
+    await predictionContract.connect(betDownuser4).betDown(currentBetId, ethers.utils.parseUnits("10", 6));
+    await predictionContract.connect(betDownuser5).betDown(currentBetId, ethers.utils.parseUnits("10", 6));
+
+
+    let UsdcBalanceOfPredictionContract = await usdc.balanceOf(predictionContract.address);
+    //console.log(`USDC in betUpuser1 Amount:  ${UsdcBalanceOfPredictionContract}`); 
+    //總投注金額 //5人下注 合約內此時應為50元
+    assert.equal(ethers.BigNumber.from(UsdcBalanceOfPredictionContract), 50000000);
+
+  })
+
+  it("Should record each bet data", async function() {
+    const {owner, betUpuser1, betUpuser2, betUpuser3, betDownuser4, betDownuser5, betDownuser6, predictionContract, mockOracle, usdc} = await loadFixture(deployFixture);
     const price1200 = 120000000000;
     await mockOracle.updateAnswer(price1200);
     const currentBetId = 0;
-    //const updatedPriceConsumerResult = await predictionContract.getLatestPrice();
     
-    await predictionContract.connect(betUpuser1).betUp(currentBetId, 10000000)//ethers.utils.parseUnits("10", 6)
+    await predictionContract.connect(betUpuser1).betUp(currentBetId, ethers.utils.parseUnits("10", 6));//需投注10USDC
+    await predictionContract.connect(betUpuser2).betUp(currentBetId, ethers.utils.parseUnits("10", 6));
+    await predictionContract.connect(betUpuser3).betUp(currentBetId, ethers.utils.parseUnits("10", 6));
+    await predictionContract.connect(betDownuser4).betDown(currentBetId, ethers.utils.parseUnits("10", 6));
+    await predictionContract.connect(betDownuser5).betDown(currentBetId, ethers.utils.parseUnits("10", 6));
+    
+    await predictionContract.connect(owner).RewardCalculater(currentBetId);
+    
+    //await expectRevert(predictionContract.claim([0], { from: betUpuser1 }), "Round has not ended");
 
+    //await expectRevert(predictionContract.connect(betUpuser1).claim()), "Round has not ended");
 
-
+  
   })
 
   }  
