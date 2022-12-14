@@ -145,9 +145,6 @@ describe("Price Prediction", () => {
     const lastBetId = 0;
     const currentBetId = 0;
 
-    // await predictionContract.connect(owner)._lockBet(lastBetId, 0, price1000);
-    // await predictionContract.connect(owner)._closeBet(lastBetId);
-
     await predictionContract.connect(owner)._openBet(currentBetId);
 
 
@@ -159,9 +156,11 @@ describe("Price Prediction", () => {
     
 
     // advance time by 2 hour and mine a new block
-    //await helpers.time.increase(7200);
-    await ethers.provider.send("evm_increaseTime", [2 * 60 * 60]); // 2hours
+    await ethers.provider.send("evm_increaseTime", [2 * 60 * 60]); 
     await predictionContract.connect(owner)._lockBet(currentBetId);
+    //30 seconds
+    await ethers.provider.send("evm_increaseTime", [30]); 
+    await predictionContract.connect(owner)._closeBet(currentBetId);
 
     //await predictionContract.connect(owner).RewardCalculater(currentBetId);
     //claim
