@@ -169,13 +169,13 @@ contract Prediction is Ownable, ReentrancyGuard {
         EachBetRecord storage eachBetRecord = allBetRecords[_betId];//抓局數資訊
 
         uint256 betUpUsersPerGame = eachBetRecord.betUpUsers;//獲取該局投注up人數
-        console.log("xxx", betUpUsersPerGame);
+        //console.log("xxx", betUpUsersPerGame);
         uint256 betDownUsersPerGame = eachBetRecord.betDownUsers;//獲取該局投注down人數
-        console.log("yyy", betDownUsersPerGame);
+        //console.log("yyy", betDownUsersPerGame);
 
         uint256 rewardPerGame = eachBetRecord.totalReward;//獲取該局總投注獎金
         
-        console.log("zzz", rewardPerGame);
+        //console.log("zzz", rewardPerGame);
 
         
         //up 方勝 前局price < 此局price
