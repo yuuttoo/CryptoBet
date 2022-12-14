@@ -134,19 +134,21 @@ describe("Price Prediction", () => {
 
   })
 
-  it("Should record each bet data", async function() {
+  it("Should lock after bet open for 2 hours", async function() {
     const {owner, betUpuser1, betUpuser2, betUpuser3, betDownuser4, betDownuser5, betDownuser6, predictionContract, mockOracle, usdc} = await loadFixture(deployFixture);
-    const price1000 = 100000000000;
+    //const price1000 = 100000000000;
 
-    const price1200 = 120000000000;
-    await mockOracle.updateAnswer(price1200);
+    const price800 = 80000000000;
+    await mockOracle.updateAnswer(price800);
+    // const price1200 = 120000000000;
+    // await mockOracle.updateAnswer(price1200);
     const lastBetId = 0;
     const currentBetId = 0;
 
     // await predictionContract.connect(owner)._lockBet(lastBetId, 0, price1000);
     // await predictionContract.connect(owner)._closeBet(lastBetId);
 
-    // await predictionContract.connect(owner)._openBet(currentBetId);
+    await predictionContract.connect(owner)._openBet(currentBetId);
 
 
     await predictionContract.connect(betUpuser1).betUp(currentBetId, ethers.utils.parseUnits("10", 6));//需投注10USDC
@@ -155,8 +157,14 @@ describe("Price Prediction", () => {
     await predictionContract.connect(betDownuser4).betDown(currentBetId, ethers.utils.parseUnits("10", 6));
     await predictionContract.connect(betDownuser5).betDown(currentBetId, ethers.utils.parseUnits("10", 6));
     
-    await predictionContract.connect(owner).RewardCalculater(currentBetId);
-    claim
+
+    // advance time by 2 hour and mine a new block
+    //await helpers.time.increase(7200);
+    await ethers.provider.send("evm_increaseTime", [2 * 60 * 60]); // 2hours
+    await predictionContract.connect(owner)._lockBet(currentBetId);
+
+    //await predictionContract.connect(owner).RewardCalculater(currentBetId);
+    //claim
     //lock進行結算第1局 
     //await predictionContract.connect(owner)._lockBet(currentBetId, 0, price1200);
 

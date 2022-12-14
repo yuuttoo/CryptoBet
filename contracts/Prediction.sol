@@ -24,7 +24,7 @@ contract Prediction is Ownable, ReentrancyGuard {
     uint256 public currentBetId; //紀錄場次
     //uint256 public roundId; //紀錄場次 供oracle判斷次序 需要從betId轉型？
     uint256 public latestOracleRoundId; //從chainlink取得後轉型
-    int256 public latestOraclePrice = 90000000000;//ETH 預設上一回報價900元
+    int256 public latestOraclePrice;//ETH 預設上一回報價900元
     uint256 public totalBalance;//供贏家提領的獎金餘額
     uint256 public smallVault;//存放暫時未用到的資金
 
@@ -81,6 +81,7 @@ contract Prediction is Ownable, ReentrancyGuard {
         token = _token;
         currentBetId = 0;
         latestOracleRoundId = 0;
+        latestOraclePrice = 90000000000;//900
         totalBalance = 0;//供贏家提領的獎金USDC餘額 
     }
 
@@ -120,7 +121,7 @@ contract Prediction is Ownable, ReentrancyGuard {
         //更新每局紀錄資訊
         uint256 amount = _amount;
         EachBetRecord storage eachBetRecord = allBetRecords[betId];
-        require(allBetRecords[betId].lockTimestamp == 0, "This Bet has already locked");
+        //require(allBetRecords[betId].lockTimestamp == 0, "This Bet has already locked");
         eachBetRecord.totalReward = eachBetRecord.totalReward + amount;
        
         eachBetRecord.betUpUsers += 1;
@@ -149,7 +150,7 @@ contract Prediction is Ownable, ReentrancyGuard {
         //更新每局紀錄資訊
         uint256 amount = _amount;
         EachBetRecord storage eachBetRecord = allBetRecords[betId];
-        require(allBetRecords[betId].lockTimestamp == 0, "This Bet has already locked");
+        //require(allBetRecords[betId].lockTimestamp == 0, "This Bet has already locked");
         eachBetRecord.totalReward = eachBetRecord.totalReward + amount;
        
         eachBetRecord.betDownUsers += 1;
@@ -165,36 +166,41 @@ contract Prediction is Ownable, ReentrancyGuard {
     }
 
 
-    function RewardCalculater(uint256 _betId) external  {
+    function RewardCalculater(uint256 _betId)  internal {//external
         EachBetRecord storage eachBetRecord = allBetRecords[_betId];//抓局數資訊
 
+        // console.log("QQ", eachBetRecord);
+        // console.log("TT", eachBetRecord.currentBetPrice);
         uint256 betUpUsersPerGame = eachBetRecord.betUpUsers;//獲取該局投注up人數
-        //console.log("xxx", betUpUsersPerGame);
         uint256 betDownUsersPerGame = eachBetRecord.betDownUsers;//獲取該局投注down人數
-        //console.log("yyy", betDownUsersPerGame);
-
         uint256 rewardPerGame = eachBetRecord.totalReward;//獲取該局總投注獎金
-        
-        //console.log("zzz", rewardPerGame);
+        //console.log("kkk",rewardPerGame1);
+        //console.log("TT", eachBetRecord.currentBetPrice);
 
-        
+
         //up 方勝 前局price < 此局price
         if(eachBetRecord.lastBetPrice < eachBetRecord.currentBetPrice) {
+            //console.log("kkk",eachBetRecord.lastBetPrice);
             //每位投注up的users可分得金額
             eachBetRecord.rewardEachWinner = rewardPerGame / betUpUsersPerGame;
-            console.log("kkk", eachBetRecord.rewardEachWinner);
+            // console.log("kkk1", rewardPerGame);
+            // console.log("kkk2", betUpUsersPerGame);
+             //console.log("kkk3", eachBetRecord.rewardEachWinner);//25 000000
         }
         //down 方勝
         else if(eachBetRecord.lastBetPrice > eachBetRecord.currentBetPrice) {
             //每位投注down的users可分得金額
+            
             eachBetRecord.rewardEachWinner = rewardPerGame / betDownUsersPerGame;
-             console.log("ppp", eachBetRecord.rewardEachWinner);
+            //console.log("kkk2", betDownUsersPerGame);
+            //console.log("kkk3", eachBetRecord.rewardEachWinner);//25 000000
+            console.log("ppp", eachBetRecord.rewardEachWinner);
         }
         //和局 (放到公積金smallVault)
         else {
             eachBetRecord.rewardEachWinner = 0;
             smallVault += rewardPerGame;
-            console.log("rrr", eachBetRecord.rewardEachWinner);
+            //console.log("rrr", eachBetRecord.rewardEachWinner);
 
         }
 
@@ -240,19 +246,26 @@ contract Prediction is Ownable, ReentrancyGuard {
         EachBetRecord storage eachBetRecord = allBetRecords[currentBetId];
 
         eachBetRecord.betId = currentBetId;
-        
+        eachBetRecord.lastBetPrice = latestOraclePrice;//把上一個報價加入新局紀錄
         eachBetRecord.startTimestamp = block.timestamp;
         eachBetRecord.lockTimestamp = block.timestamp + WAITING_PERIOD;//2hr後開獎
         eachBetRecord.endTimestamp = block.timestamp + WAITING_PERIOD + INTERVAL_SECONDS;//開獎後留30秒處理獎金
     }
 
     //停止入金 抓oracle數值 更新本局結算用到的變數 
-    function _lockBet(uint256 currentBetId, uint _oracleRoundId, int256 _price) external onlyOwner {
+    function _lockBet(uint256 currentBetId) external onlyOwner {
         require(block.timestamp >= allBetRecords[currentBetId].lockTimestamp, "Not lock time yet");
         require(block.timestamp <= allBetRecords[currentBetId].lockTimestamp + INTERVAL_SECONDS, "Over lock time");
+        
+        //從oracle取得本局最新價格
+        (uint80 currentRoundId, int256 currentPrice) = getLatestPrice();
+        latestOracleRoundId = uint256(currentRoundId);//用過的roundID紀錄在latest供下一輪比對
+        
 
         EachBetRecord storage eachBetRecord = allBetRecords[currentBetId];
-        //RewardCalculater(currentBetId);
+        eachBetRecord.currentBetPrice = int256(currentPrice);
+        latestOraclePrice = int256(currentPrice);//更新全域變數
+        RewardCalculater(currentBetId);
         eachBetRecord.endTimestamp = block.timestamp + INTERVAL_SECONDS;//再加30秒設定為關局時間
         
 
@@ -264,14 +277,10 @@ contract Prediction is Ownable, ReentrancyGuard {
         require(block.timestamp >= allBetRecords[currentBetId].endTimestamp, "Not close time yet");
         require(block.timestamp <= allBetRecords[currentBetId].endTimestamp + INTERVAL_SECONDS, "Over close time");//一局結束後30秒才能開新局
 
-        //從oracle取得目前價格
-        (uint80 currentRoundId, int256 currentPrice) = getLatestPrice();
-        latestOracleRoundId = uint256(currentRoundId);//用過的roundID紀錄在latest供下一輪比對
-        
         //本局ETH價格結算到紀錄
-        EachBetRecord storage eachBetRecord = allBetRecords[currentBetId];
-        eachBetRecord.currentBetPrice = currentPrice;
-        eachBetRecord.oracleRoundId = currentRoundId;
+        //EachBetRecord storage eachBetRecord = allBetRecords[currentBetId];
+        // eachBetRecord.currentBetPrice = currentPrice;
+        // eachBetRecord.oracleRoundId = currentRoundId;
 
 
         currentBetId++; //新局id往下推
