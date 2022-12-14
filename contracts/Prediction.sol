@@ -24,7 +24,7 @@ contract Prediction is Ownable, ReentrancyGuard {
     uint256 public currentBetId; //紀錄場次
     //uint256 public roundId; //紀錄場次 供oracle判斷次序 需要從betId轉型？
     uint256 public latestOracleRoundId; //從chainlink取得後轉型
-    int256 public latestOraclePrice;//ETH 預設上一回報價900元
+    int256 public latestOraclePrice;//ETH 上一回報價
     uint256 public totalBalance;//供贏家提領的獎金餘額
     uint256 public smallVault;//存放暫時未用到的資金
 
@@ -81,7 +81,7 @@ contract Prediction is Ownable, ReentrancyGuard {
         token = _token;
         currentBetId = 0;
         latestOracleRoundId = 0;
-        latestOraclePrice = 90000000000;//900
+        latestOraclePrice = 100000000000;//1000
         totalBalance = 0;//供贏家提領的獎金USDC餘額 
     }
 

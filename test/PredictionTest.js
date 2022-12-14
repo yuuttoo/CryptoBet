@@ -22,6 +22,8 @@ describe("Price Prediction", () => {
     const [owner, betUpuser1, betUpuser2, betUpuser3, betDownuser4, betDownuser5, betDownuser6] = await ethers.getSigners();
     const DECIMALS = "8";//ETH/USD decimals 8
     const INITIAL_PRICE = "100000000000"//設置ETH初始價格1000
+    //const INITIAL_PRICE = "60000000000"//設置ETH初始價格1000
+
     let usdc;
 
     //部署假chainlink
@@ -164,7 +166,6 @@ describe("Price Prediction", () => {
 
   it("Should be able to claim reward", async function() {
     const {owner, betUpuser1, betUpuser2, betUpuser3, betDownuser4, betDownuser5, betDownuser6, predictionContract, mockOracle, usdc} = await loadFixture(deployFixture);
-    //const price1000 = 100000000000;
 
     const price800 = 80000000000;
     await mockOracle.updateAnswer(price800);
