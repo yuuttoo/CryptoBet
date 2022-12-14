@@ -67,13 +67,6 @@ describe("Price Prediction", () => {
     await usdc.connect(betDownuser6).approve(predictionContract.address, transferAmount);
 
 
-
-
-
-
- 
-
-
     return {owner, betUpuser1, betUpuser2, betUpuser3, betDownuser4, betDownuser5, betDownuser6, predictionContract, mockOracle};
   }
 
@@ -85,7 +78,7 @@ describe("Price Prediction", () => {
 
   })
 
-  it("Should get ETH price from Oracle", async function() {
+  it("Should get ETH price from Oracle", async function() {//ok
     const {predictionContract, mockOracle} = await loadFixture(deployFixture);
 
     //const priceConsumerResult = await predictionContract.getLatestPrice();
@@ -103,7 +96,7 @@ describe("Price Prediction", () => {
   })
 
   //檢查兩次oracle的roundId, 新的id需要比舊的大 否則無效
-  it("Should update oracle roundID", async function() {
+  it("Should update oracle roundID", async function() {//ok
     const {predictionContract, mockOracle} = await loadFixture(deployFixture);
     const priceConsumerResult = await predictionContract.getLatestPrice();
     const priceRoundId = ethers.BigNumber.from(priceConsumerResult[0]);
@@ -122,9 +115,17 @@ describe("Price Prediction", () => {
   })
 
 
-  it("Should update ETH price from oracle with newer roundId", async function() {
-    const {predictionContract, mockOracle} = await loadFixture(deployFixture);
-  
+  it("Should record user bet record", async function() {
+    const {owner, betUpuser1, betUpuser2, betUpuser3, betDownuser4, betDownuser5, betDownuser6, predictionContract, mockOracle} = await loadFixture(deployFixture);
+    const price1200 = 120000000000;
+    await mockOracle.updateAnswer(price1200);
+    const currentBetId = 0;
+    //const updatedPriceConsumerResult = await predictionContract.getLatestPrice();
+    
+    await predictionContract.connect(betUpuser1).betUp(currentBetId, 10000000)//ethers.utils.parseUnits("10", 6)
+
+
+
   })
 
   }  

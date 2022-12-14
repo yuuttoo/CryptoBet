@@ -20,7 +20,7 @@ contract Prediction is Ownable, ReentrancyGuard {
 
     uint256 public constant WAITING_PERIOD = 2 hours;
     uint256 public constant INTERVAL_SECONDS = 30 seconds;//30秒為單位
-    uint256 public constant FIXED_BET_AMOUNT = 1000000;//1 USDC decimal6, 0.01 ether; //限制每注金額 0.01ether
+    uint256 public constant FIXED_BET_AMOUNT = 10000000;//10 USDC decimal6, 0.01 ether; //限制每注金額 0.01ether
     //uint256 public constant minBetAmount = 0.01 ether ;//最小賭金 0.01 檢查一下decimal   
     //uint256 public constant maxBetAmount = 100 ether;// 最高賭金  檢查一下decimal               
     uint256 public currentBetId; //紀錄場次
@@ -112,7 +112,7 @@ contract Prediction is Ownable, ReentrancyGuard {
     function betUp(uint256 betId, uint256 _amount) external nonReentrant {
         require(!_isContract(msg.sender), "Only wallet allowed");
         require(betId == currentBetId, "This Bet is not availble");
-        require(_amount != FIXED_BET_AMOUNT, "Bet Amount should be 0.01 ETH");
+        require(_amount == FIXED_BET_AMOUNT, "Bet Amount should be 10 USDC");
         require(userBetProof[currentBetId][msg.sender].amount == 0, "Can only enter once on each bet");
         
         token.transferFrom(msg.sender, address(this), _amount);
@@ -139,7 +139,7 @@ contract Prediction is Ownable, ReentrancyGuard {
     function betDown(uint256 betId, uint256 _amount) external nonReentrant{
         require(!_isContract(msg.sender), "Only wallet allowed");
         require(betId == currentBetId, "This Bet is not availble");
-        require(_amount != FIXED_BET_AMOUNT, "Bet Amount should be 0.01 ETH");
+        require(_amount == FIXED_BET_AMOUNT, "Bet Amount should be 10 USDC");
         require(userBetProof[currentBetId][msg.sender].amount == 0, "Can only enter once on each bet");
         
         token.transferFrom(msg.sender, address(this), _amount);
