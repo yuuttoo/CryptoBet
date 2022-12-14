@@ -8,7 +8,6 @@ import { ReentrancyGuard } from "@openzeppelin/contracts/security/ReentrancyGuar
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
-//import "./interfaces/AggregatorV3Interface.sol";
 
 
 contract Prediction is Ownable, ReentrancyGuard { 
@@ -21,7 +20,9 @@ contract Prediction is Ownable, ReentrancyGuard {
 
     uint256 public constant WAITING_PERIOD = 2 hours;
     uint256 public constant INTERVAL_SECONDS = 30 seconds;//30秒為單位
-    uint256 public constant FIXED_BET_AMOUNT = 0.01 ether; //限制每注金額 0.01ether            
+    uint256 public constant FIXED_BET_AMOUNT = 0.01 ether; //限制每注金額 0.01ether
+    //uint256 public constant minBetAmount = 0.01 ether ;//最小賭金 0.01 檢查一下decimal   
+    //uint256 public constant maxBetAmount = 100 ether;// 最高賭金  檢查一下decimal               
     uint256 public currentBetId; //紀錄場次
     //uint256 public roundId; //紀錄場次 供oracle判斷次序 需要從betId轉型？
     uint256 public latestOracleRoundId; //從chainlink取得後轉型
@@ -63,7 +64,11 @@ contract Prediction is Ownable, ReentrancyGuard {
         bool claimed; //是否已領取獎金
     }
 
+
+
+
     //chainlink地址
+
     /**
      * Network: Goerli
      * Aggregator: ETH/USD
@@ -112,6 +117,7 @@ contract Prediction is Ownable, ReentrancyGuard {
         //更新每局紀錄資訊
         uint256 amount = _amount;
         EachBetRecord storage eachBetRecord = allBetRecords[betId];
+        require(allBetRecords[betId].lockTimestamp == 0, "This Bet has already locked");
         eachBetRecord.totalReward = eachBetRecord.totalReward + amount;
        
         eachBetRecord.betUpUsers += 1;
@@ -127,7 +133,7 @@ contract Prediction is Ownable, ReentrancyGuard {
     
     }
 
-    function betDown(uint256 betId, uint256 _amount)  external {
+    function betDown(uint256 betId, uint256 _amount) external nonReentrant{
         require(!_isContract(msg.sender), "Only wallet allowed");
         require(betId == currentBetId, "This Bet is not availble");
         require(_amount != FIXED_BET_AMOUNT, "Bet Amount should be 0.01 ETH");
@@ -138,6 +144,7 @@ contract Prediction is Ownable, ReentrancyGuard {
         //更新每局紀錄資訊
         uint256 amount = _amount;
         EachBetRecord storage eachBetRecord = allBetRecords[betId];
+        require(allBetRecords[betId].lockTimestamp == 0, "This Bet has already locked");
         eachBetRecord.totalReward = eachBetRecord.totalReward + amount;
        
         eachBetRecord.betUpUsers += 1;
@@ -153,7 +160,7 @@ contract Prediction is Ownable, ReentrancyGuard {
     }
 
 
-    function RewardCalculater(uint256 _betId) internal {
+    function RewardCalculater(uint256 _betId) external onlyOwner {
         EachBetRecord storage eachBetRecord = allBetRecords[_betId];//抓局數資訊
 
         uint256 betUpUsersPerGame = eachBetRecord.betUpUsers;//獲取該局投注up人數
@@ -214,7 +221,7 @@ contract Prediction is Ownable, ReentrancyGuard {
     //可開始進行遊戲
     //賭局(每場賭局的生命週期循環）
     //開賭 可收賭金 處理狀態變數後再調用gameUnlock重新開放
-    function _openBet(uint256 currentBetId) internal {
+    function _openBet(uint256 currentBetId) external onlyOwner {
         EachBetRecord storage eachBetRecord = allBetRecords[currentBetId];
 
         eachBetRecord.betId = currentBetId;
@@ -224,7 +231,7 @@ contract Prediction is Ownable, ReentrancyGuard {
     }
 
     //停止入金 抓oracle數值 更新本局結算用到的變數 
-    function _lockBet(uint256 currentBetId, uint _oracleRoundId, int256 _price) internal {
+    function _lockBet(uint256 currentBetId, uint _oracleRoundId, int256 _price) external onlyOwner {
         require(block.timestamp >= allBetRecords[currentBetId].lockTimestamp, "Not lock time yet");
         require(block.timestamp <= allBetRecords[currentBetId].lockTimestamp + INTERVAL_SECONDS, "Over lock time");
 
@@ -235,7 +242,7 @@ contract Prediction is Ownable, ReentrancyGuard {
     }
 
     //結算 推進機制到下一場 機制歸零、帳本歸零 
-    function _closeBet(uint256 currentBetId) internal {
+    function _closeBet(uint256 currentBetId) external onlyOwner {
         require(allBetRecords[currentBetId].endTimestamp != 0, "Already closed");
         require(block.timestamp >= allBetRecords[currentBetId].endTimestamp, "Not close time yet");
         require(block.timestamp <= allBetRecords[currentBetId].endTimestamp + INTERVAL_SECONDS, "Over close time");//一局結束後30秒才能開新局
