@@ -162,5 +162,43 @@ describe("Price Prediction", () => {
   
   })
 
+  it("Should be able to claim reward", async function() {
+    const {owner, betUpuser1, betUpuser2, betUpuser3, betDownuser4, betDownuser5, betDownuser6, predictionContract, mockOracle, usdc} = await loadFixture(deployFixture);
+    //const price1000 = 100000000000;
+
+    const price800 = 80000000000;
+    await mockOracle.updateAnswer(price800);
+
+    const currentBetId = 0;
+
+    await predictionContract.connect(owner)._openBet(currentBetId);
+
+    await predictionContract.connect(betUpuser1).betUp(currentBetId, ethers.utils.parseUnits("10", 6));//需投注10USDC
+    await predictionContract.connect(betUpuser2).betUp(currentBetId, ethers.utils.parseUnits("10", 6));
+    await predictionContract.connect(betUpuser3).betUp(currentBetId, ethers.utils.parseUnits("10", 6));
+    await predictionContract.connect(betDownuser4).betDown(currentBetId, ethers.utils.parseUnits("10", 6));
+    await predictionContract.connect(betDownuser5).betDown(currentBetId, ethers.utils.parseUnits("10", 6));
+    
+
+    // advance time by 2 hours and lock bet 
+    await ethers.provider.send("evm_increaseTime", [2 * 60 * 60]); 
+    await predictionContract.connect(owner)._lockBet(currentBetId);//結算獎勵在此階段處理
+    //advance 30 seconds to close bet 
+    await ethers.provider.send("evm_increaseTime", [30]); 
+    await predictionContract.connect(owner)._closeBet(currentBetId);
+
+    //await predictionContract.connect(betDownuser5).claim()
+    let usdcOfbetDownuser5Before = await usdc.balanceOf(betDownuser5.address);//原有 990USDC
+    //console.log(`betDownuser5 Before USDC balance: ${usdcOfbetDownuser5Before}`); 
+    await predictionContract.connect(betDownuser5).claim([0]);
+    let usdcOfbetDownuser5After = await usdc.balanceOf(betDownuser5.address);//提領25USDC獎金後 1015USDC
+    //console.log(`betDownuser5 After USDC balance: ${usdcOfbetDownuser5After}`); 
+
+    //提領獎金之前餘額 < 提領後
+    expect(usdcOfbetDownuser5Before).to.be.below(usdcOfbetDownuser5After);
+
+  
+  })
+
   }  
 )

@@ -211,8 +211,10 @@ contract Prediction is Ownable, ReentrancyGuard {
         
         
         for(uint256 i = 0; i < betIdArray.length; i++) {
-            //確認該場次id < 目前場次id 已經過去的局才能領取
-            require(allBetRecords[betIdArray[i]].betId < currentBetId, "Bet not start yet");
+            //確認該場次endTimestamp不為0表示已開獎 可領
+            //console.log("AA", allBetRecords[betIdArray[i]].endTimestamp );
+            //console.log("", allBetRecords[betIdArray[i]].endTimestamp );
+            require(allBetRecords[betIdArray[i]].lockTimestamp != 0, "Bet not end yet");
             require(userBetProof[betIdArray[i]][msg.sender].claimed == false, "Not eligible for claim");
             uint reward; 
             //查詢該局每位贏家可領的reward
