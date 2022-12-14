@@ -136,10 +136,19 @@ describe("Price Prediction", () => {
 
   it("Should record each bet data", async function() {
     const {owner, betUpuser1, betUpuser2, betUpuser3, betDownuser4, betDownuser5, betDownuser6, predictionContract, mockOracle, usdc} = await loadFixture(deployFixture);
+    const price1000 = 100000000000;
+
     const price1200 = 120000000000;
     await mockOracle.updateAnswer(price1200);
+    const lastBetId = 0;
     const currentBetId = 0;
-    
+
+    // await predictionContract.connect(owner)._lockBet(lastBetId, 0, price1000);
+    // await predictionContract.connect(owner)._closeBet(lastBetId);
+
+    // await predictionContract.connect(owner)._openBet(currentBetId);
+
+
     await predictionContract.connect(betUpuser1).betUp(currentBetId, ethers.utils.parseUnits("10", 6));//需投注10USDC
     await predictionContract.connect(betUpuser2).betUp(currentBetId, ethers.utils.parseUnits("10", 6));
     await predictionContract.connect(betUpuser3).betUp(currentBetId, ethers.utils.parseUnits("10", 6));
@@ -147,10 +156,15 @@ describe("Price Prediction", () => {
     await predictionContract.connect(betDownuser5).betDown(currentBetId, ethers.utils.parseUnits("10", 6));
     
     await predictionContract.connect(owner).RewardCalculater(currentBetId);
-    
-    //await expectRevert(predictionContract.claim([0], { from: betUpuser1 }), "Round has not ended");
+    claim
+    //lock進行結算第1局 
+    //await predictionContract.connect(owner)._lockBet(currentBetId, 0, price1200);
 
-    //await expectRevert(predictionContract.connect(betUpuser1).claim()), "Round has not ended");
+    //await predictionContract.connect(owner)._closeBet(currentBetId);
+
+    //(uint256 currentBetId, uint _oracleRoundId, int256 _price
+
+
 
   
   })
