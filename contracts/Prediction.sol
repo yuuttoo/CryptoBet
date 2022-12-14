@@ -169,13 +169,11 @@ contract Prediction is Ownable, ReentrancyGuard {
     function RewardCalculater(uint256 _betId)  internal {//external
         EachBetRecord storage eachBetRecord = allBetRecords[_betId];//抓局數資訊
 
-        // console.log("QQ", eachBetRecord);
-        // console.log("TT", eachBetRecord.currentBetPrice);
+
         uint256 betUpUsersPerGame = eachBetRecord.betUpUsers;//獲取該局投注up人數
         uint256 betDownUsersPerGame = eachBetRecord.betDownUsers;//獲取該局投注down人數
         uint256 rewardPerGame = eachBetRecord.totalReward;//獲取該局總投注獎金
-        //console.log("kkk",rewardPerGame1);
-        //console.log("TT", eachBetRecord.currentBetPrice);
+
 
 
         //up 方勝 前局price < 此局price
@@ -183,24 +181,22 @@ contract Prediction is Ownable, ReentrancyGuard {
             //console.log("kkk",eachBetRecord.lastBetPrice);
             //每位投注up的users可分得金額
             eachBetRecord.rewardEachWinner = rewardPerGame / betUpUsersPerGame;
-            // console.log("kkk1", rewardPerGame);
-            // console.log("kkk2", betUpUsersPerGame);
-             //console.log("kkk3", eachBetRecord.rewardEachWinner);//25 000000
+            console.log("RewardCalculater: rewardEachWinner", eachBetRecord.rewardEachWinner);
+
         }
         //down 方勝
         else if(eachBetRecord.lastBetPrice > eachBetRecord.currentBetPrice) {
             //每位投注down的users可分得金額
             
             eachBetRecord.rewardEachWinner = rewardPerGame / betDownUsersPerGame;
-            //console.log("kkk2", betDownUsersPerGame);
-            //console.log("kkk3", eachBetRecord.rewardEachWinner);//25 000000
-            console.log("ppp", eachBetRecord.rewardEachWinner);
+            console.log("RewardCalculater: rewardEachWinner", eachBetRecord.rewardEachWinner);
         }
         //和局 (放到公積金smallVault)
         else {
             eachBetRecord.rewardEachWinner = 0;
             smallVault += rewardPerGame;
-            //console.log("rrr", eachBetRecord.rewardEachWinner);
+            console.log("RewardCalculater: rewardEachWinner", eachBetRecord.rewardEachWinner);
+
 
         }
 

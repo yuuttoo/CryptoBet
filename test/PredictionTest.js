@@ -140,13 +140,11 @@ describe("Price Prediction", () => {
 
     const price800 = 80000000000;
     await mockOracle.updateAnswer(price800);
-    // const price1200 = 120000000000;
-    // await mockOracle.updateAnswer(price1200);
-    const lastBetId = 0;
+
     const currentBetId = 0;
+    // const newerBetId = 1;
 
     await predictionContract.connect(owner)._openBet(currentBetId);
-
 
     await predictionContract.connect(betUpuser1).betUp(currentBetId, ethers.utils.parseUnits("10", 6));//需投注10USDC
     await predictionContract.connect(betUpuser2).betUp(currentBetId, ethers.utils.parseUnits("10", 6));
@@ -155,24 +153,12 @@ describe("Price Prediction", () => {
     await predictionContract.connect(betDownuser5).betDown(currentBetId, ethers.utils.parseUnits("10", 6));
     
 
-    // advance time by 2 hour and mine a new block
+    // advance time by 2 hours and lock bet 
     await ethers.provider.send("evm_increaseTime", [2 * 60 * 60]); 
-    await predictionContract.connect(owner)._lockBet(currentBetId);
-    //30 seconds
+    await predictionContract.connect(owner)._lockBet(currentBetId);//結算獎勵在此階段處理
+    //advance 30 seconds to close bet 
     await ethers.provider.send("evm_increaseTime", [30]); 
     await predictionContract.connect(owner)._closeBet(currentBetId);
-
-    //await predictionContract.connect(owner).RewardCalculater(currentBetId);
-    //claim
-    //lock進行結算第1局 
-    //await predictionContract.connect(owner)._lockBet(currentBetId, 0, price1200);
-
-    //await predictionContract.connect(owner)._closeBet(currentBetId);
-
-    //(uint256 currentBetId, uint _oracleRoundId, int256 _price
-
-
-
   
   })
 
